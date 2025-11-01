@@ -21,6 +21,8 @@ dependencies = [
     "langchain-anthropic>=1.0.1",
     "langchain-mcp-adapters==0.1.11",
     "langgraph-supervisor==0.0.30",
+    "langgraph-checkpoint-sqlite>=3.0.0",
+    "aiosqlite>=0.21.0",
     "readabilipy>=0.3.0",
     "python-dotenv>=1.0.1",
     "fastapi>=0.119.1",
@@ -35,6 +37,8 @@ dependencies = [
     "py-spy>=0.3.14",
     "nest-asyncio>=1.6.0",
     "injector==0.22.0",
+    "rich>=13.7.0",
+    "prompt-toolkit>=3.0.43",
 ]
 
 [project.scripts]

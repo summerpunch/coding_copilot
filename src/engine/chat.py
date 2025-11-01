@@ -5,6 +5,7 @@ from src.engine.agents import supervisor
 
 logger = logging.getLogger(__name__)
 
+
 async def run_agent(
         message: str,
         thread_id: str,
@@ -22,7 +23,7 @@ async def run_agent(
             "thread_id": thread_id,
         }
 
-    graph = supervisor.get_supervisor_instance()
+    graph = await supervisor.get_supervisor_instance()
     async for event in graph.astream_events(
             await builder_param(),
             config=config
@@ -31,6 +32,7 @@ async def run_agent(
         if process_result:
             for result in process_result:
                 yield result
+
 
 async def main2():
     async for output in run_agent("用一句话解释量子计算是什么", "111"):

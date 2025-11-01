@@ -3,38 +3,53 @@ from typing import (
     Annotated
 )
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph_sdk.schema import Context
 
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
 from langgraph.constants import START
 from langgraph.graph import StateGraph
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph_supervisor import create_supervisor
+import os
+import asyncio
 import threading
 
 _thread_lock = threading.Lock()
+_async_lock = asyncio.Lock()
 
-def get_supervisor_instance():
-    with _thread_lock:
-        if supervisor_graph.get_graph():
-            return supervisor_graph.get_graph()
-        graph = initializer_supervisor_graph(checkpointer=InMemorySaver())
-        supervisor_graph.graph = graph
-        return graph
+
+async def get_supervisor_instance():
+    async with _async_lock:
+        with _thread_lock:
+            if supervisor_graph.get_graph():
+                return supervisor_graph.get_graph()
+            db_path = os.path.join(os.getcwd(), "copilot_checkpoints.sqlite")
+            _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
+            supervisor_graph.checkpointer_ctx = _checkpointer_ctx
+            _checkpointer = await _checkpointer_ctx.__aenter__()
+            supervisor_graph.checkpointer = _checkpointer
+            graph = initializer_supervisor_graph(checkpointer=_checkpointer)
+            supervisor_graph.graph = graph
+            return graph
+
 
 class SupervisorGraph:
     def __init__(self):
-        self.version = None
+        self.checkpointer = None
+        self.checkpointer_ctx = None
         self.graph = None
 
-    def get_version(self) -> str:
-        return self.version
+    def get_checkpointer(self) -> str:
+        return self.checkpointer
+
+    def get_checkpointer_ctx(self) -> str:
+        return self.checkpointer_ctx
 
     def get_graph(self) -> str:
         return self.graph
 
 
-def initializer_supervisor_graph(checkpointer: InMemorySaver):
+def initializer_supervisor_graph(checkpointer: AsyncSqliteSaver):
     llm = llm_factory.factory(AgentConfig())
     planner = initializer_planner_graph(checkpointer=checkpointer)
     executor = initializer_executor_graph(checkpointer=checkpointer)
@@ -90,7 +105,7 @@ supervisor_graph = SupervisorGraph()
 
 if __name__ == "__main__":
     print(1)
-    print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
+    # print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
     messages = [
         HumanMessage(content="用一句话解释量子计算是什么。")
     ]

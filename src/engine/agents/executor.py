@@ -28,8 +28,6 @@ async def executor_node(state: CopilotState) -> Command[
         system_prompt=prompt
     )
     response = await agent.ainvoke({"messages": messages})
-    for message in response:
-        print(message.content)
     return Command(
         goto=END,
     )
