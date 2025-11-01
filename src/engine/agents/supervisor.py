@@ -10,9 +10,31 @@ from langgraph.constants import START
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph_supervisor import create_supervisor
+import threading
 
-def initializer_supervisor_graph():
-    checkpointer = InMemorySaver()
+_thread_lock = threading.Lock()
+
+def get_supervisor_instance():
+    with _thread_lock:
+        if supervisor_graph.get_graph():
+            return supervisor_graph.get_graph()
+        graph = initializer_supervisor_graph(checkpointer=InMemorySaver())
+        supervisor_graph.graph = graph
+        return graph
+
+class SupervisorGraph:
+    def __init__(self):
+        self.version = None
+        self.graph = None
+
+    def get_version(self) -> str:
+        return self.version
+
+    def get_graph(self) -> str:
+        return self.graph
+
+
+def initializer_supervisor_graph(checkpointer: InMemorySaver):
     llm = llm_factory.factory(AgentConfig())
     planner = initializer_planner_graph(checkpointer=checkpointer)
     executor = initializer_executor_graph(checkpointer=checkpointer)
@@ -63,6 +85,8 @@ def initializer_explorer_graph(checkpointer=None):
 class CopilotState(AgentState):
     thread_id: Annotated[str, lambda x, y: y]
 
+
+supervisor_graph = SupervisorGraph()
 
 if __name__ == "__main__":
     print(1)
