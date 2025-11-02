@@ -1,6 +1,6 @@
 from langchain.agents import AgentState, create_agent
 from typing import (
-    Annotated
+    Annotated, Optional
 )
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -49,17 +49,19 @@ class SupervisorGraph:
         return self.graph
 
 
-def initializer_supervisor_graph(checkpointer: AsyncSqliteSaver):
+def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
     llm = llm_factory.factory(AgentConfig())
     planner = initializer_planner_graph(checkpointer=checkpointer)
     executor = initializer_executor_graph(checkpointer=checkpointer)
-    explorer = initializer_explorer_graph(checkpointer=checkpointer)
+    analyzer = initializer_analyzer_graph(checkpointer=checkpointer)
+    reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
     supervisor = create_supervisor(
         model=llm,
         agents=[
             planner,
             executor,
-            explorer,
+            analyzer,
+            reviewer,
         ],
         prompt="",
         tools=[],
@@ -87,13 +89,21 @@ def initializer_executor_graph(checkpointer=None):
     return builder.compile(name="executor_agent",
                            checkpointer=checkpointer)
 
-
-def initializer_explorer_graph(checkpointer=None):
+def initializer_analyzer_graph(checkpointer=None):
     builder = StateGraph(CopilotState)
-    from src.engine.agents.explorer import explorer_node
-    builder.add_edge(START, "explorer_node")
-    builder.add_node("explorer_node", explorer_node)
-    return builder.compile(name="explorer_agent",
+    from src.engine.agents.analyzer import analyzer_node
+    builder.add_edge(START, "analyzer_node")
+    builder.add_node("analyzer_node", analyzer_node)
+    return builder.compile(name="analyzer_agent",
+                           checkpointer=checkpointer)
+
+
+def initializer_reviewer_graph(checkpointer=None):
+    builder = StateGraph(CopilotState)
+    from src.engine.agents.reviewer import reviewer_node
+    builder.add_edge(START, "reviewer_node")
+    builder.add_node("reviewer_node", reviewer_node)
+    return builder.compile(name="reviewer_agent",
                            checkpointer=checkpointer)
 
 
@@ -104,8 +114,7 @@ class CopilotState(AgentState):
 supervisor_graph = SupervisorGraph()
 
 if __name__ == "__main__":
-    print(1)
-    # print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
+    print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
     messages = [
         HumanMessage(content="用一句话解释量子计算是什么。")
     ]

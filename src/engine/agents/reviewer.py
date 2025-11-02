@@ -9,16 +9,16 @@ from src.engine.tools.search import glob_search, grep_search
 from src.engine.tools.file_ops import read_file
 
 
-async def planner_node(state: CopilotState) -> Command[
+async def reviewer_node(state: CopilotState) -> Command[
     Literal[
         "__end__"
     ]]:
     messages = state["messages"]
-    planner_prompt = template.get_local_prompt("planner_prompt")
+    prompt = template.get_local_prompt("reviewer_prompt")
     agent = create_agent(
         model=llm_factory.factory(AgentConfig()),
         tools=[read_file, grep_search, glob_search],
-        system_prompt=planner_prompt
+        system_prompt=prompt
     )
     response = await agent.ainvoke({"messages": messages})
     return Command(

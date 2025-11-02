@@ -23,6 +23,7 @@ dependencies = [
     "langgraph-supervisor==0.0.30",
     "langgraph-checkpoint-sqlite>=3.0.0",
     "aiosqlite>=0.21.0",
+    "pyinstaller>=6.16.0",
     "readabilipy>=0.3.0",
     "python-dotenv>=1.0.1",
     "fastapi>=0.119.1",
