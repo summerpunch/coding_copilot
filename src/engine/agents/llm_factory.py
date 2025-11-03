@@ -65,29 +65,7 @@ class LLMFactory:
     @staticmethod
     def _is_claude(model_name: str) -> bool:
         name = model_name.lower()
-        return (
-                "claude-3-7" in name
-                or "claude-4" in name
-                or "claude-opus-4" in name
-                or "claude-sonnet-4" in name
-        )
-
-    def default_llm(self, config: Optional[AgentConfig] = None) -> BaseLanguageModel:
-        if config is None:
-            config = AgentConfig()
-        model = config.get_model()
-        base_url = config.get_base_url()
-        api_key = config.get_api_key()
-        temperature = config.get_temperature()
-        return ChatOpenAI(
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
-            temperature=temperature,
-            reasoning_effort="high",
-            http_client=httpx.Client(verify=False),
-            http_async_client=httpx.AsyncClient(verify=False)
-        )
+        return 'claude' in name
 
     def factory(self, config: AgentConfig) -> BaseLanguageModel:
         cached_llm = self.get_cached_llm(config)

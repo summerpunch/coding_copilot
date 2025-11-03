@@ -1,14 +1,11 @@
-from langchain.agents import AgentState, create_agent
 from typing import (
-    Annotated, Optional
+    Annotated, Optional, Literal
 )
-from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph_sdk.schema import Context
-
+from src.engine.prompts import template
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
-from langgraph.constants import START
-from langgraph.graph import StateGraph
+from langgraph.constants import START, END
+from langgraph.graph import StateGraph, add_messages, MessagesState
 from langgraph_supervisor import create_supervisor
 import os
 import asyncio
@@ -55,6 +52,9 @@ def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] = None
     executor = initializer_executor_graph(checkpointer=checkpointer)
     analyzer = initializer_analyzer_graph(checkpointer=checkpointer)
     reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
+
+    supervisor_prompt = template.get_local_prompt("supervisor_prompt")
+
     supervisor = create_supervisor(
         model=llm,
         agents=[
@@ -63,7 +63,7 @@ def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] = None
             analyzer,
             reviewer,
         ],
-        prompt="",
+        prompt=supervisor_prompt,
         tools=[],
         add_handoff_back_messages=False
     )
@@ -89,6 +89,7 @@ def initializer_executor_graph(checkpointer=None):
     return builder.compile(name="executor_agent",
                            checkpointer=checkpointer)
 
+
 def initializer_analyzer_graph(checkpointer=None):
     builder = StateGraph(CopilotState)
     from src.engine.agents.analyzer import analyzer_node
@@ -107,26 +108,71 @@ def initializer_reviewer_graph(checkpointer=None):
                            checkpointer=checkpointer)
 
 
-class CopilotState(AgentState):
-    thread_id: Annotated[str, lambda x, y: y]
+class SessionAutoApprove:
+    def __init__(self):
+        self._session_auto_approve = {}
+
+    def clear_auto_approve(self, thread_id: str):
+        del self._session_auto_approve[thread_id]
+
+    def has_auto_approve(self, thread_id: str):
+        return self._session_auto_approve.get(thread_id, False)
+
+    def set_auto_approve(self, thread_id: str):
+        self._session_auto_approve[thread_id] = True
+
+
+class CopilotState(MessagesState):
+    """
+    Complete state structure for Copilot workflow.
+
+    Supports two execution modes:
+    1. Standard Mode: Supervisor → Analyzer → Executor → Reviewer
+    2. Planner Mode: Supervisor → Planner → Analyzer → Executor → Reviewer
+    """
+    # Core conversation state
+    # user_input: str
+    # has_all_allowed: Annotated[bool, lambda x, y: y] = False
+    # thread_id: Annotated[str, lambda x, y: y] = ''
+
+    # Execution mode control
+    # planner_mode: bool  # True = use Planner, False = direct to Analyzer
+    # current_stage: Literal[
+    #     "init",  # Initial state
+    #     "planning",  # Planner is creating high-level plan
+    #     "analyzing",  # Analyzer is analyzing and designing solution
+    #     "executing",  # Executor is applying changes
+    #     "reviewing",  # Reviewer is checking code
+    #     "complete",  # Task completed successfully
+    #     "failed"  # Task failed
+    # ]
+    #
+    # # Agent outputs and intermediate results
+    # plan: Optional[dict]  # From Planner: {"steps": [...], "complexity": "simple|medium|complex"}
+    # analysis: Optional[dict]  # From Analyzer: {"problem": "...", "solution": {...}, "changes": [...]}
+    # execution_result: Optional[dict]  # From Executor: {"files_changed": [...], "success": bool}
+    # review_feedback: Optional[dict]  # From Reviewer: {"approved": bool, "issues": [...], "suggestions": [...]}
+    #
+    # # Todo tracking (for Planner mode)
+    # todos: Annotated[list[dict], lambda x, y: y if y else x]  # List of todo items with status
+    # current_step: Optional[int]  # Current step index in plan
+    #
+    # # Routing and control flow
+    # next_agent: Optional[str]  # Which agent to route to next
+    # is_complete: bool  # Whether the entire workflow is complete
+    # requires_approval: bool  # Whether human approval is needed
+    #
+    # # Error handling
+    # error_message: Optional[str]  # Error information if something fails
+    # retry_count: int  # Number of retries attempted
+    #
+    # # Context and metadata
+    # task_type: Optional[Literal["simple", "complex", "refactor", "debug", "feature"]]
+    # risk_level: Optional[Literal["low", "medium", "high"]]  # For determining approval requirements
 
 
 supervisor_graph = SupervisorGraph()
+session_auto_approve = SessionAutoApprove()
 
 if __name__ == "__main__":
     print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
-    messages = [
-        HumanMessage(content="用一句话解释量子计算是什么。")
-    ]
-    agent = create_agent(
-        model=llm_factory.factory(AgentConfig()),
-        tools=[],
-    )
-    # {"messages": [{"role": "user", "content": "用一句话解释量子计算是什么"}]},
-
-    # ✅ 同步流式输出
-    for chunk in agent.stream(
-            {"messages": [{"role": "user", "content": "用一句话解释量子计算是什么"}]},
-            context=Context(user_role="expert")
-    ):
-        print(chunk)

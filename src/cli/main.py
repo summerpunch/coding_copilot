@@ -4,7 +4,8 @@ import uuid
 import sys
 from typing import Optional
 from datetime import datetime
-
+from rich.panel import Panel
+from rich.markdown import Markdown
 from rich.console import Console
 
 from prompt_toolkit import PromptSession
@@ -51,6 +52,18 @@ class CodingCopilotCLI:
         console.print("  2. Be specific for the best results.")
         console.print("  3. [bold bright_cyan]/help[/bold bright_cyan] for more information.")
         console.print()
+
+        md = Markdown(
+            ":sparkles: [bold cyan]**LangGraph**[/bold cyan] — [yellow]**Claude Code Clone**[/yellow]"
+        )
+
+        console.print(
+            Panel.fit(
+                Markdown("**LangGraph Coding Agent** — Claude Code Clone"),
+                title="[bold green] Ready [/bold green]",
+                border_style="green",
+            )
+        )
 
     def display_help(self):
         """显示帮助信息"""

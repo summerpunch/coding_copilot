@@ -1,14 +1,24 @@
 import logging
 import asyncio
+from typing import Optional
+
 from src.engine import event_process
 from src.engine.agents import supervisor
+from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 
+decisions_map = {
+    'approve': 'approve',
+    'edit': 'edit',
+    'reject': 'reject',
+    'auto_approve': 'approve',
+}
 
 async def run_agent(
         message: str,
         thread_id: str,
+        decisions_type: Optional[str] = 'reject',
 ):
     logger.info(f"thread_id:{thread_id}, 准备开始执行工作流，用户输入: {message}")
     config = {
@@ -18,9 +28,21 @@ async def run_agent(
     }
 
     async def builder_param():
+        if await has_interrupt(graph, thread_id):
+            return Command(
+                resume={
+                    'decisions': [
+                        {
+                            'type': decisions_map.get(decisions_type, 'reject'),
+                        }
+                    ]
+                },
+                update={
+                    'thread_id': thread_id,
+                }
+            )
         return {
             "messages": [message],
-            "thread_id": thread_id,
         }
 
     graph = await supervisor.get_supervisor_instance()
@@ -32,6 +54,18 @@ async def run_agent(
         if process_result:
             for result in process_result:
                 yield result
+
+
+async def has_interrupt(graph, thread_id):
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await graph.aget_state(config)
+        if state.interrupts:
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"检查线程中断状态时出错: {e}")
+        return False
 
 
 async def main2():
