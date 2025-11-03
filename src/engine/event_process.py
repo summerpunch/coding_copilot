@@ -33,7 +33,6 @@ async def execute(event: Dict[str, Any], thread_id: str) -> Optional[list[str]]:
     name = await get_name(event)
     if name in skip:
         return None
-    print(event)
     event_type = event.get("event", "")
     run_id = await get_run_id(event)
     event_type = event.get("event", "")
@@ -61,7 +60,7 @@ async def on_chain_stream_copilot(event: Dict[str, Any]) -> Optional[list[str]]:
                 action_name = first_review.get('action_name')
                 allowed_decisions = first_review.get('allowed_decisions', [])
                 allowed_decisions.append('auto_approve')
-                return [review_configs[0]]
+                return [f'当前待执行的工具为: {action_name}', '请选择操作方式: [1 接受] [2 拒绝]']
                 # return [{'allowed_decisions': allowed_decisions, "action_name": action_name}]
 
 

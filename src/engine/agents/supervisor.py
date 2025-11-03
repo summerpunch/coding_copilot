@@ -15,7 +15,7 @@ _thread_lock = threading.Lock()
 _async_lock = asyncio.Lock()
 
 
-async def get_supervisor_instance(mode: str):
+async def get_supervisor_instance():
     async with _async_lock:
         with _thread_lock:
             if supervisor_graph.get_edit_graph():
@@ -174,4 +174,4 @@ supervisor_graph = SupervisorGraph()
 session_auto_approve = SessionAutoApprove()
 
 if __name__ == "__main__":
-    print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())
+    print(initializer_supervisor_edit_graph().get_graph(xray=True).draw_mermaid())

@@ -8,18 +8,16 @@ from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 
-decisions_map = {
-    'approve': 'approve',
-    'edit': 'edit',
-    'reject': 'reject',
-    'auto_approve': 'approve',
+mapping_map = {
+    '1': 'approve',
+    '2': 'reject',
 }
+
 
 async def run_agent(
         message: str,
         thread_id: str,
         mode: Optional[str] = None,
-        decisions_type: Optional[str] = 'reject',
 ):
     logger.info(f"thread_id:{thread_id}, 准备开始执行工作流，用户输入: {message}")
     config = {
@@ -34,7 +32,7 @@ async def run_agent(
                 resume={
                     'decisions': [
                         {
-                            'type': decisions_map.get(decisions_type, 'reject'),
+                            'type': mapping_map.get(message, 'reject'),
                         }
                     ]
                 },
@@ -46,7 +44,7 @@ async def run_agent(
             "messages": [message],
         }
 
-    graph = await supervisor.get_supervisor_instance(mode)
+    graph = await supervisor.get_supervisor_instance()
     async for event in graph.astream_events(
             await builder_param(),
             config=config
