@@ -19,7 +19,7 @@ dependencies = [
     "langchain-core>=1.0.2",
     "langchain-openai>=1.0.1",
     "langchain-anthropic>=1.0.1",
-    "langchain-mcp-adapters==0.1.11",
+    "langchain-mcp-adapters==0.1.12",
     "langgraph-supervisor==0.0.30",
     "langgraph-checkpoint-sqlite>=3.0.0",
     "aiosqlite>=0.21.0",

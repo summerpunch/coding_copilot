@@ -6,10 +6,11 @@ from src.engine.prompts import template
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph, add_messages, MessagesState
-from langgraph_supervisor import create_supervisor
+from src.engine.agents.supervisor_sdk.supervisor import create_supervisor
 import os
 import asyncio
 import threading
+from src.engine.mcp import mcp_client
 
 _thread_lock = threading.Lock()
 _async_lock = asyncio.Lock()
@@ -25,7 +26,7 @@ async def get_supervisor_instance():
             supervisor_graph.checkpointer_ctx = _checkpointer_ctx
             _checkpointer = await _checkpointer_ctx.__aenter__()
             supervisor_graph.checkpointer = _checkpointer
-            graph = initializer_supervisor_edit_graph(checkpointer=_checkpointer)
+            graph = await initializer_supervisor_edit_graph(checkpointer=_checkpointer)
             supervisor_graph.edit_graph = graph
             return graph
 
@@ -48,12 +49,13 @@ class SupervisorGraph:
         return self.edit_graph
 
 
-def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
+async def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
     llm = llm_factory.factory(AgentConfig())
     executor = initializer_executor_graph(checkpointer=checkpointer)
     analyzer = initializer_analyzer_graph(checkpointer=checkpointer)
     reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
     supervisor_prompt = template.get_local_prompt("supervisor_prompt")
+    web_search_tools = await mcp_client.get_tools('web_search')
     supervisor = create_supervisor(
         model=llm,
         agents=[
@@ -62,7 +64,7 @@ def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] =
             reviewer,
         ],
         prompt=supervisor_prompt,
-        tools=[],
+        tools=web_search_tools,
         output_mode="full_history",
         add_handoff_messages=True,
         add_handoff_back_messages=True
@@ -70,6 +72,7 @@ def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] =
     return supervisor.compile(
         checkpointer=checkpointer
     )
+
 
 def initializer_planner_graph(checkpointer=None):
     builder = StateGraph(CopilotState)
