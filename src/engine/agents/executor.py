@@ -20,26 +20,9 @@ async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
     Literal[
         "__end__"
     ]]:
-    """
-    Executor Agent Node - Executes code changes precisely and safely.
-
-    Tools (WRITE ACCESS):
-    - read_file: Read files (for verification before/after changes)
-    - write_file: Create new files (requires approval)
-    - edit_file: Modify existing files (requires approval)
-    - bash_execute: Run shell commands
-    - grep_search: Verify changes were applied
-    - glob_search: Find files for verification
-    - write_todos: Update progress tracking (TODO: add this tool)
-
-    Human-in-the-Loop middleware requires approval for write_file and edit_file
-    to ensure safety of file modifications.
-    """
-    logger.info("start executor node")
+    logger.info("Starting Executor Agent - 精确代码执行")
     messages = state["messages"]
-
     prompt = template.get_local_prompt("executor_prompt")
-    # Executor tools: Full WRITE access with safety gates
     executor_tools = [
         bash_execute,
         read_file,
@@ -47,9 +30,7 @@ async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
         edit_file,
         glob_search,
         grep_search,
-        # write_todos,  # TODO: Add once implemented
     ]
-
     agent = create_agent(
         model=llm_factory.factory(AgentConfig()),
         tools=executor_tools,
@@ -57,13 +38,13 @@ async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
         middleware=[
             HumanInTheLoopMiddleware(
                 interrupt_on={"write_file": True, "edit_file": True},
-                description_prefix="Tool execution pending approval",
+                description_prefix="📝 文件操作需要批准",
             )
-        ])
-
-    response = await agent.ainvoke({"messages": messages})
-
-    # TODO: Extract execution result and update state
+        ]
+    )
+    logger.info("Invoking Executor Agent...")
+    response = await agent.ainvoke({"messages": messages}, config=config)
+    logger.info("Executor Agent completed")
     return Command(
         goto=END,
     )

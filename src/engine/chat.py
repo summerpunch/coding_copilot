@@ -18,6 +18,7 @@ decisions_map = {
 async def run_agent(
         message: str,
         thread_id: str,
+        mode: Optional[str] = None,
         decisions_type: Optional[str] = 'reject',
 ):
     logger.info(f"thread_id:{thread_id}, 准备开始执行工作流，用户输入: {message}")
@@ -45,7 +46,7 @@ async def run_agent(
             "messages": [message],
         }
 
-    graph = await supervisor.get_supervisor_instance()
+    graph = await supervisor.get_supervisor_instance(mode)
     async for event in graph.astream_events(
             await builder_param(),
             config=config

@@ -15,18 +15,18 @@ _thread_lock = threading.Lock()
 _async_lock = asyncio.Lock()
 
 
-async def get_supervisor_instance():
+async def get_supervisor_instance(mode: str):
     async with _async_lock:
         with _thread_lock:
-            if supervisor_graph.get_graph():
-                return supervisor_graph.get_graph()
+            if supervisor_graph.get_edit_graph():
+                return supervisor_graph.get_edit_graph()
             db_path = os.path.join(os.getcwd(), "copilot_checkpoints.sqlite")
             _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
             supervisor_graph.checkpointer_ctx = _checkpointer_ctx
             _checkpointer = await _checkpointer_ctx.__aenter__()
             supervisor_graph.checkpointer = _checkpointer
-            graph = initializer_supervisor_graph(checkpointer=_checkpointer)
-            supervisor_graph.graph = graph
+            graph = initializer_supervisor_edit_graph(checkpointer=_checkpointer)
+            supervisor_graph.edit_graph = graph
             return graph
 
 
@@ -34,7 +34,9 @@ class SupervisorGraph:
     def __init__(self):
         self.checkpointer = None
         self.checkpointer_ctx = None
-        self.graph = None
+        self.edit_graph = None
+        self.plan_graph = None
+        self.yolo_graph = None
 
     def get_checkpointer(self) -> str:
         return self.checkpointer
@@ -42,35 +44,32 @@ class SupervisorGraph:
     def get_checkpointer_ctx(self) -> str:
         return self.checkpointer_ctx
 
-    def get_graph(self) -> str:
-        return self.graph
+    def get_edit_graph(self) -> str:
+        return self.edit_graph
 
 
-def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
+def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
     llm = llm_factory.factory(AgentConfig())
-    planner = initializer_planner_graph(checkpointer=checkpointer)
     executor = initializer_executor_graph(checkpointer=checkpointer)
     analyzer = initializer_analyzer_graph(checkpointer=checkpointer)
     reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
-
     supervisor_prompt = template.get_local_prompt("supervisor_prompt")
-
     supervisor = create_supervisor(
         model=llm,
         agents=[
-            planner,
-            executor,
             analyzer,
+            executor,
             reviewer,
         ],
         prompt=supervisor_prompt,
         tools=[],
-        add_handoff_back_messages=False
+        output_mode="full_history",
+        add_handoff_messages=True,
+        add_handoff_back_messages=True
     )
     return supervisor.compile(
         checkpointer=checkpointer
     )
-
 
 def initializer_planner_graph(checkpointer=None):
     builder = StateGraph(CopilotState)
