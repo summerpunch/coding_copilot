@@ -35,8 +35,7 @@ class ModelContextProtocolServer:
         client = self.get_client(tool_name)
         if client:
             return await client.get_tools()
+        return []
+
 
 mcp_server = ModelContextProtocolServer()
-
-
-

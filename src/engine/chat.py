@@ -26,7 +26,6 @@ async def run_agent(
         thread_id: Thread ID for session management
         mode: Operating mode - "edit" (default) or "plan"
     """
-    print(mode)
     logger.info(f"thread_id:{thread_id}, mode:{mode}, 准备开始执行工作流，用户输入: {message}")
     config = {
         "configurable": {
@@ -54,7 +53,7 @@ async def run_agent(
             "messages": [message],
         }
 
-    graph = await supervisor.get_supervisor_instance()
+    graph = await supervisor.get_supervisor_instance(mode=mode)
     async for event in graph.astream_events(
             await builder_param(),
             config=config

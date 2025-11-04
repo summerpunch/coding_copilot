@@ -1,8 +1,10 @@
 from typing import (
     Annotated, Optional, Literal
 )
-from langchain.agents.middleware import SummarizationMiddleware
+from langchain.agents.middleware import SummarizationMiddleware, ToolRetryMiddleware
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.pregel import Pregel
+
 from src.engine.prompts import template
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
 from langgraph.constants import START, END
@@ -17,19 +19,33 @@ _thread_lock = threading.Lock()
 _async_lock = asyncio.Lock()
 
 
-async def get_supervisor_instance():
+async def get_supervisor_instance(mode: str):
     async with _async_lock:
         with _thread_lock:
-            if supervisor_graph.get_edit_graph():
-                return supervisor_graph.get_edit_graph()
-            db_path = os.path.join(os.getcwd(), "copilot_checkpoints.sqlite")
-            _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
-            supervisor_graph.checkpointer_ctx = _checkpointer_ctx
-            _checkpointer = await _checkpointer_ctx.__aenter__()
-            supervisor_graph.checkpointer = _checkpointer
-            graph = await initializer_supervisor_edit_graph(checkpointer=_checkpointer)
-            supervisor_graph.edit_graph = graph
-            return graph
+            if mode == 'edit':
+                if supervisor_graph.get_edit_graph():
+                    return supervisor_graph.get_edit_graph()
+                if supervisor_graph.checkpointer is None:
+                    await initializer_checkpointer()
+                graph = await initializer_supervisor_graph(checkpointer=supervisor_graph.checkpointer)
+                supervisor_graph.edit_graph = graph
+                return graph
+            if mode == 'plan':
+                if supervisor_graph.get_plan_graph():
+                    return supervisor_graph.get_plan_graph()
+                if supervisor_graph.checkpointer is None:
+                    await initializer_checkpointer()
+                graph = await initializer_supervisor_plan_graph(checkpointer=supervisor_graph.checkpointer)
+                supervisor_graph.plan_graph = graph
+                return graph
+            if mode == 'yolo':
+                if supervisor_graph.get_yolo_graph():
+                    return supervisor_graph.get_yolo_graph()
+                if supervisor_graph.checkpointer is None:
+                    await initializer_checkpointer()
+                graph = await initializer_supervisor_graph(checkpointer=supervisor_graph.checkpointer, mode=mode)
+                supervisor_graph.yolo_graph = graph
+                return graph
 
 
 class SupervisorGraph:
@@ -46,38 +62,67 @@ class SupervisorGraph:
     def get_checkpointer_ctx(self) -> str:
         return self.checkpointer_ctx
 
-    def get_edit_graph(self) -> str:
+    def get_edit_graph(self):
         return self.edit_graph
 
+    def get_plan_graph(self):
+        return self.plan_graph
 
-async def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
+    def get_yolo_graph(self):
+        return self.yolo_graph
+
+
+async def initializer_checkpointer():
+    db_path = os.path.join(os.getcwd(), "copilot_checkpoints.sqlite")
+    _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
+    supervisor_graph.checkpointer_ctx = _checkpointer_ctx
+    _checkpointer = await _checkpointer_ctx.__aenter__()
+    supervisor_graph.checkpointer = _checkpointer
+
+
+async def initializer_supervisor_plan_graph(checkpointer: Optional[AsyncSqliteSaver] = None):
+    return await initializer_supervisor(agents=[
+        initializer_planner_graph(checkpointer=checkpointer),
+        initializer_executor_graph(checkpointer=checkpointer),
+        initializer_analyzer_graph(checkpointer=checkpointer),
+        initializer_reviewer_graph(checkpointer=checkpointer),
+    ], checkpointer=checkpointer)
+
+
+async def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] = None, mode: str = 'edit'):
+    return await initializer_supervisor(agents=[
+        initializer_executor_graph(checkpointer=checkpointer, mode=mode),
+        initializer_analyzer_graph(checkpointer=checkpointer),
+        initializer_reviewer_graph(checkpointer=checkpointer),
+    ], checkpointer=checkpointer)
+
+
+async def initializer_supervisor(agents: list[Pregel], checkpointer: Optional[AsyncSqliteSaver] = None):
     llm = llm_factory.factory(AgentConfig())
-    executor = initializer_executor_graph(checkpointer=checkpointer)
-    analyzer = initializer_analyzer_graph(checkpointer=checkpointer)
-    reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
     supervisor_prompt = template.get_local_prompt("supervisor_prompt")
     web_search_tools = await mcp_client.get_tools('web_search')
-
     supervisor = create_supervisor(
         model=llm,
-        agents=[
-            analyzer,
-            executor,
-            reviewer,
-        ],
+        agents=agents,
         prompt=supervisor_prompt,
         tools=web_search_tools,
         output_mode="full_history",
         middleware=[
             SummarizationMiddleware(
                 model=llm,
-                max_tokens_before_summary=25000,  # 25k tokens 触发消息压缩
+                max_tokens_before_summary=10000,  # 25k tokens 触发消息压缩
                 messages_to_keep=40  # 保留最近 40 条消息
-            )
+            ),
+            ToolRetryMiddleware(
+                max_retries=3,  # 最多重试3次
+                backoff_factor=2.0,  # 指数退避倍数
+                initial_delay=1.0,  # 初始延迟1秒
+                max_delay=60.0,  # 最大延迟60秒
+                jitter=True,  # 添加随机抖动(±25%)
+            ),
         ],
         add_handoff_messages=True,
         add_handoff_back_messages=True
-
     )
     return supervisor.compile(
         checkpointer=checkpointer
@@ -93,11 +138,15 @@ def initializer_planner_graph(checkpointer=None):
                            checkpointer=checkpointer)
 
 
-def initializer_executor_graph(checkpointer=None):
+def initializer_executor_graph(checkpointer=None, mode: str = 'edit'):
     builder = StateGraph(CopilotState)
-    from src.engine.agents.executor import executor_node
     builder.add_edge(START, "executor_node")
-    builder.add_node("executor_node", executor_node)
+    if mode and mode == 'yolo':
+        from src.engine.agents.executor import executor_yolo_node
+        builder.add_node("executor_node", executor_yolo_node)
+    else:
+        from src.engine.agents.executor import executor_node
+        builder.add_node("executor_node", executor_node)
     return builder.compile(name="executor_agent",
                            checkpointer=checkpointer)
 
@@ -118,20 +167,6 @@ def initializer_reviewer_graph(checkpointer=None):
     builder.add_node("reviewer_node", reviewer_node)
     return builder.compile(name="reviewer_agent",
                            checkpointer=checkpointer)
-
-
-class SessionAutoApprove:
-    def __init__(self):
-        self._session_auto_approve = {}
-
-    def clear_auto_approve(self, thread_id: str):
-        del self._session_auto_approve[thread_id]
-
-    def has_auto_approve(self, thread_id: str):
-        return self._session_auto_approve.get(thread_id, False)
-
-    def set_auto_approve(self, thread_id: str):
-        self._session_auto_approve[thread_id] = True
 
 
 class CopilotState(MessagesState):
@@ -184,7 +219,6 @@ class CopilotState(MessagesState):
 
 
 supervisor_graph = SupervisorGraph()
-session_auto_approve = SessionAutoApprove()
 
 if __name__ == "__main__":
-    print(initializer_supervisor_edit_graph().get_graph(xray=True).draw_mermaid())
+    print(initializer_supervisor_graph().get_graph(xray=True).draw_mermaid())

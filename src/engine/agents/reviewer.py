@@ -1,4 +1,6 @@
 from typing import Literal
+
+from langchain.agents.middleware import ToolRetryMiddleware
 from langgraph.constants import END
 from langgraph.types import Command
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
@@ -29,7 +31,16 @@ async def reviewer_node(state: CopilotState) -> Command[
     agent = create_agent(
         model=llm_factory.factory(AgentConfig()),
         tools=reviewer_tools,
-        system_prompt=prompt
+        system_prompt=prompt,
+        middleware=[
+            ToolRetryMiddleware(
+                max_retries=3,  # 最多重试3次
+                backoff_factor=2.0,  # 指数退避倍数
+                initial_delay=1.0,  # 初始延迟1秒
+                max_delay=60.0,  # 最大延迟60秒
+                jitter=True,  # 添加随机抖动(±25%)
+            )
+        ]
     )
     logger.info("Invoking Reviewer Agent...")
     response = await agent.ainvoke({"messages": messages})
