@@ -23,7 +23,8 @@ async def run_agent(
     config = {
         "configurable": {
             "thread_id": thread_id,
-        }
+        },
+        "recursion_limit": 50,
     }
 
     async def builder_param():
