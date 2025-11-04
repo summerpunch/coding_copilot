@@ -1,6 +1,7 @@
 from typing import (
     Annotated, Optional, Literal
 )
+from langchain.agents.middleware import SummarizationMiddleware
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from src.engine.prompts import template
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
@@ -56,6 +57,7 @@ async def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSa
     reviewer = initializer_reviewer_graph(checkpointer=checkpointer)
     supervisor_prompt = template.get_local_prompt("supervisor_prompt")
     web_search_tools = await mcp_client.get_tools('web_search')
+
     supervisor = create_supervisor(
         model=llm,
         agents=[
@@ -66,8 +68,16 @@ async def initializer_supervisor_edit_graph(checkpointer: Optional[AsyncSqliteSa
         prompt=supervisor_prompt,
         tools=web_search_tools,
         output_mode="full_history",
+        middleware=[
+            SummarizationMiddleware(
+                model=llm,
+                max_tokens_before_summary=25000,  # 25k tokens 触发消息压缩
+                messages_to_keep=40  # 保留最近 40 条消息
+            )
+        ],
         add_handoff_messages=True,
         add_handoff_back_messages=True
+
     )
     return supervisor.compile(
         checkpointer=checkpointer

@@ -42,8 +42,8 @@ def add_inline_agent_name(message: BaseMessage) -> BaseMessage:
 
     formatted_message = message.model_copy()
     if _is_content_blocks_content(message.content):
-        text_blocks = [block for block in message.content if block["type"] == "text"]  # type: ignore[invalid-argument-type]
-        non_text_blocks = [block for block in message.content if block["type"] != "text"]  # type: ignore[invalid-argument-type]
+        text_blocks = [block for block in message.content if block["type"] == "text"]
+        non_text_blocks = [block for block in message.content if block["type"] != "text"]
         content = text_blocks[0]["text"] if text_blocks else ""
         formatted_content = f"<name>{message.name}</name><content>{content}</content>"
         formatted_message_content = [{"type": "text", "text": formatted_content}] + non_text_blocks
@@ -70,11 +70,11 @@ def remove_inline_agent_name(message: BaseMessage) -> BaseMessage:
         return message
 
     if is_content_blocks_content := _is_content_blocks_content(message.content):
-        text_blocks = [block for block in message.content if block["type"] == "text"]  # type: ignore[invalid-argument-type]
+        text_blocks = [block for block in message.content if block["type"] == "text"]
         if not text_blocks:
             return message
 
-        non_text_blocks = [block for block in message.content if block["type"] != "text"]  # type: ignore[invalid-argument-type]
+        non_text_blocks = [block for block in message.content if block["type"] != "text"]
         content = text_blocks[0]["text"]
     else:
         content = message.content
@@ -106,7 +106,7 @@ def with_agent_name(
     This is useful for making a message history with multiple agents more coherent.
 
     NOTE: agent name is consumed from the message.name field.
-        If you're using an agent built with create_react_agent, name is automatically set.
+        If you're using an agent built with create_agent, name is automatically set.
         If you're building a custom agent, make sure to set the name on the AI message returned by the LLM.
 
     Args:

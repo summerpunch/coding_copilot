@@ -2,7 +2,9 @@ import inspect
 from typing import Any, Callable, Literal, Optional, Sequence, Type, Union, cast, get_args
 from uuid import UUID, uuid5
 from warnings import warn
-
+from langgraph.typing import ContextT
+from langchain.agents.middleware import SummarizationMiddleware, AgentMiddleware
+from langchain.agents.middleware.types import ResponseT
 from langchain_core.language_models import BaseChatModel, LanguageModelLike
 from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -12,15 +14,13 @@ from langgraph._internal._runnable import RunnableCallable, RunnableLike
 from langgraph._internal._typing import DeprecatedKwargs
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from langchain.agents import create_agent, AgentState
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.chat_agent_executor import (
-    AgentState,
-    AgentStateWithStructuredResponse,
     Prompt,
     StateSchemaType,
     StructuredResponseSchema,
-    _should_bind_tools,
-    create_react_agent,
+    _should_bind_tools, AgentStateWithStructuredResponse,
 )
 from langgraph.pregel import Pregel
 from langgraph.pregel.remote import RemoteGraph
@@ -41,7 +41,6 @@ OutputMode = Literal["full_history", "last_message"]
 - `last_message`: add only the last message
 """
 
-
 MODELS_NO_PARALLEL_TOOL_CALLS = {"o3-mini", "o3", "o4-mini"}
 
 
@@ -50,7 +49,7 @@ def _supports_disable_parallel_tool_calls(model: LanguageModelLike) -> bool:
         return False
 
     if (
-        model_name := getattr(model, "model_name", None)
+            model_name := getattr(model, "model_name", None)
     ) and model_name in MODELS_NO_PARALLEL_TOOL_CALLS:
         return False
 
@@ -64,10 +63,10 @@ def _supports_disable_parallel_tool_calls(model: LanguageModelLike) -> bool:
 
 
 def _make_call_agent(
-    agent: Pregel[Any],
-    output_mode: OutputMode,
-    add_handoff_back_messages: bool,
-    supervisor_name: str,
+        agent: Pregel[Any],
+        output_mode: OutputMode,
+        add_handoff_back_messages: bool,
+        supervisor_name: str,
 ) -> Callable[[dict], dict] | RunnableCallable:
     if output_mode not in get_args(OutputMode):
         raise ValueError(
@@ -138,16 +137,16 @@ def _get_handoff_destinations(tools: Sequence[BaseTool | Callable]) -> list[str]
         tool.metadata[METADATA_KEY_HANDOFF_DESTINATION]
         for tool in tools
         if isinstance(tool, BaseTool)
-        and tool.metadata is not None
-        and METADATA_KEY_HANDOFF_DESTINATION in tool.metadata
+           and tool.metadata is not None
+           and METADATA_KEY_HANDOFF_DESTINATION in tool.metadata
     ]
 
 
 def _prepare_tool_node(
-    tools: list[BaseTool | Callable] | ToolNode | None,
-    handoff_tool_prefix: Optional[str],
-    add_handoff_messages: bool,
-    agent_names: set[str],
+        tools: list[BaseTool | Callable] | ToolNode | None,
+        handoff_tool_prefix: Optional[str],
+        add_handoff_messages: bool,
+        agent_names: set[str],
 ) -> ToolNode:
     """Prepare the ToolNode to use in supervisor agent."""
     if isinstance(tools, ToolNode):
@@ -209,26 +208,25 @@ class _OuterState(TypedDict):
 
 
 def create_supervisor(
-    agents: list[Pregel],
-    *,
-    model: LanguageModelLike,
-    tools: list[BaseTool | Callable] | ToolNode | None = None,
-    prompt: Prompt | None = None,
-    response_format: Optional[
-        Union[StructuredResponseSchema, tuple[str, StructuredResponseSchema]]
-    ] = None,
-    pre_model_hook: Optional[RunnableLike] = None,
-    post_model_hook: Optional[RunnableLike] = None,
-    parallel_tool_calls: bool = False,
-    state_schema: StateSchemaType | None = None,
-    context_schema: Type[Any] | None = None,
-    output_mode: OutputMode = "last_message",
-    add_handoff_messages: bool = True,
-    handoff_tool_prefix: Optional[str] = None,
-    add_handoff_back_messages: Optional[bool] = None,
-    supervisor_name: str = "supervisor",
-    include_agent_name: AgentNameMode | None = None,
-    **deprecated_kwargs: Unpack[DeprecatedKwargs],
+        agents: list[Pregel],
+        *,
+        model: LanguageModelLike,
+        tools: list[BaseTool | Callable] | ToolNode | None = None,
+        prompt: Prompt | None = None,
+        response_format: Optional[
+            Union[StructuredResponseSchema, tuple[str, StructuredResponseSchema]]
+        ] = None,
+        middleware: Sequence[AgentMiddleware[AgentState[ResponseT], ContextT]] = (),
+        parallel_tool_calls: bool = False,
+        state_schema: StateSchemaType | None = None,
+        context_schema: Type[Any] | None = None,
+        output_mode: OutputMode = "last_message",
+        add_handoff_messages: bool = True,
+        handoff_tool_prefix: Optional[str] = None,
+        add_handoff_back_messages: Optional[bool] = None,
+        supervisor_name: str = "supervisor",
+        include_agent_name: AgentNameMode | None = None,
+        **deprecated_kwargs: Unpack[DeprecatedKwargs],
 ) -> StateGraph:
     """Create a multi-agent supervisor.
 
@@ -330,7 +328,7 @@ def create_supervisor(
         from langchain_openai import ChatOpenAI
 
         from langgraph_supervisor import create_supervisor
-        from langgraph.prebuilt import create_react_agent
+        from langgraph.prebuilt import create_agent
 
         # Create specialized agents
 
@@ -342,13 +340,13 @@ def create_supervisor(
             '''Search the web for information.'''
             return 'Here are the headcounts for each of the FAANG companies in 2024...'
 
-        math_agent = create_react_agent(
+        math_agent = create_agent(
             model="openai:gpt-4o",
             tools=[add],
             name="math_expert",
         )
 
-        research_agent = create_react_agent(
+        research_agent = create_agent(
             model="openai:gpt-4o",
             tools=[web_search],
             name="research_expert",
@@ -392,7 +390,7 @@ def create_supervisor(
     for agent in agents:
         if agent.name is None or agent.name == "LangGraph":
             raise ValueError(
-                "Please specify a name when you create your agent, either via `create_react_agent(..., name=agent_name)` "
+                "Please specify a name when you create your agent, either via `create_agent(..., name=agent_name)` "
                 "or via `graph.compile(name=name)`."
             )
 
@@ -422,15 +420,14 @@ def create_supervisor(
     if include_agent_name:
         model = with_agent_name(model, include_agent_name)
 
-    supervisor_agent = create_react_agent(
+    supervisor_agent = create_agent(
         name=supervisor_name,
         model=model,
-        tools=tool_node,
-        prompt=prompt,
+        tools=all_tools,
+        system_prompt=prompt,
         state_schema=supervisor_schema,
         response_format=response_format,
-        pre_model_hook=pre_model_hook,
-        post_model_hook=post_model_hook,
+        middleware=middleware
     )
 
     builder = StateGraph(workflow_schema, context_schema=context_schema)
