@@ -144,14 +144,14 @@ class CodingCopilotCLI:
         """Switch the current session's mode.
 
         Args:
-            new_mode: New mode to switch to (edit/plan)
+            new_mode: New mode to switch to (edit/plan/yolo)
         """
         if not self.current_session:
             self.ui.display_error("No active session")
             return
 
-        if new_mode not in ['edit', 'plan']:
-            self.ui.display_error(f"Invalid mode: {new_mode}. Use 'edit' or 'plan'")
+        if new_mode not in ['edit', 'plan', 'yolo']:
+            self.ui.display_error(f"Invalid mode: {new_mode}. Use 'edit', 'plan', or 'yolo'")
             return
 
         old_mode = self.current_session.mode
@@ -262,7 +262,7 @@ class CodingCopilotCLI:
 
         elif cmd == '/new':
             # Get mode from args or use current
-            mode = parts[1] if len(parts) > 1 and parts[1] in ['edit', 'plan'] else self.current_session.mode if self.current_session else 'edit'
+            mode = parts[1] if len(parts) > 1 and parts[1] in ['edit', 'plan', 'yolo'] else self.current_session.mode if self.current_session else 'edit'
             self.create_new_session(mode)
 
         elif cmd == '/sessions':
@@ -294,11 +294,21 @@ class CodingCopilotCLI:
         try:
             while True:
                 try:
-                    # Build prompt
+                    # Build prompt with full session ID
                     if self.current_session:
-                        session_id = self.current_session.thread_id[:8]
+                        session_id = self.current_session.thread_id  # Full session ID
                         mode = self.current_session.mode
-                        mode_color = "green" if mode == "edit" else "magenta"
+
+                        # Determine mode color
+                        if mode == "edit":
+                            mode_color = "green"
+                        elif mode == "plan":
+                            mode_color = "magenta"
+                        elif mode == "yolo":
+                            mode_color = "yellow"
+                        else:
+                            mode_color = "white"
+
                         prompt_text = f"[{mode}:{session_id}] > "
                     else:
                         prompt_text = "[no-session] > "
@@ -347,7 +357,7 @@ def chat(
         "edit",
         "--mode",
         "-m",
-        help="Initial mode: edit (full workflow) or plan (planning mode)",
+        help="Initial mode: edit (full workflow), plan (planning mode), or yolo (auto-approve)",
     ),
     thread_id: Optional[str] = typer.Option(
         None,
@@ -395,9 +405,9 @@ def chat(
             disable_all_logging()
 
     # Validate mode
-    if mode not in ['edit', 'plan']:
+    if mode not in ['edit', 'plan', 'yolo']:
         console = Console()
-        console.print(f"[red]Error: Invalid mode '{mode}'. Must be 'edit' or 'plan'[/red]")
+        console.print(f"[red]Error: Invalid mode '{mode}'. Must be 'edit', 'plan', or 'yolo'[/red]")
         sys.exit(1)
 
     # Handle new flag

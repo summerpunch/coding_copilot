@@ -26,7 +26,7 @@ class CommandCompleter(Completer):
         '/new': 'Create a new chat session',
         '/sessions': 'List and switch between sessions',
         '/history': 'View current session history',
-        '/mode': 'Switch mode (edit/plan)',
+        '/mode': 'Switch mode (edit/plan/yolo)',
         '/clear': 'Clear conversation (create new session)',
         '/help': 'Show help message',
         '/quit': 'Exit Coding Copilot',
@@ -148,7 +148,7 @@ class FileCompleter(Completer):
 class ModeCompleter(Completer):
     """Completer for mode command arguments."""
 
-    MODES = ['edit', 'plan']
+    MODES = ['edit', 'plan', 'yolo']
 
     def get_completions(
         self, document: Document, complete_event
@@ -220,8 +220,8 @@ class SmartCompleter(Completer):
         """
         text = document.text_before_cursor
 
-        # Mode argument completion
-        if text.startswith('/mode'):
+        # Mode argument completion for /mode or /new commands
+        if text.startswith('/mode') or text.startswith('/new'):
             yield from self.mode_completer.get_completions(document, complete_event)
         # Command completion
         elif text.startswith('/'):

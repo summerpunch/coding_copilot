@@ -5,7 +5,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich.align import Align
+from rich.syntax import Syntax
+from rich.markdown import Markdown
 from typing import List, Optional
+import re
 
 from src.cli.session import ChatSession
 
@@ -89,10 +92,10 @@ class UIComponents:
         table.add_column("Command", style="bold bright_cyan", no_wrap=True)
         table.add_column("Description", style="white")
 
-        table.add_row("/new", "Create a new chat session")
+        table.add_row("/new [mode]", "Create a new chat session (optional: edit/plan/yolo)")
         table.add_row("/sessions", "List and switch between sessions")
         table.add_row("/history", "View current session history")
-        table.add_row("/mode <edit|plan>", "Switch between edit and plan modes")
+        table.add_row("/mode <edit|plan|yolo>", "Switch between modes")
         table.add_row("/clear", "Clear conversation (creates new session)")
         table.add_row("/help", "Show this help message")
         table.add_row("/quit or /exit", "Exit Coding Copilot")
@@ -124,7 +127,16 @@ class UIComponents:
         usage_tips.append("  • ", style="white")
         usage_tips.append("plan", style="bold bright_magenta")
         usage_tips.append(" - Planning mode for complex tasks\n", style="white")
+        usage_tips.append("  • ", style="white")
+        usage_tips.append("yolo", style="bold bright_yellow")
+        usage_tips.append(" - Auto-approve mode (fast execution)\n", style="white")
         usage_tips.append("\nKeyboard Shortcuts:\n", style="bold bright_white")
+        usage_tips.append("  • ", style="white")
+        usage_tips.append("Enter", style="bold bright_cyan")
+        usage_tips.append(" - New line (multi-line input)\n", style="white")
+        usage_tips.append("  • ", style="white")
+        usage_tips.append("Ctrl+J", style="bold bright_cyan")
+        usage_tips.append(" - Submit message (Ctrl+Enter)\n", style="white")
         usage_tips.append("  • ", style="white")
         usage_tips.append("Ctrl+C", style="bold bright_cyan")
         usage_tips.append(" - Interrupt current operation\n", style="white")
@@ -155,18 +167,30 @@ class UIComponents:
         """
         session_info = Text()
         session_info.append("Session ID: ", style="white")
-        session_info.append(session.thread_id[:8] + "...", style="bold bright_cyan")
+        session_info.append(session.thread_id, style="bold bright_cyan")  # Full session ID
         session_info.append("\nMode: ", style="white")
-        session_info.append(session.mode, style="bold bright_green" if session.mode == "edit" else "bold bright_magenta")
+
+        # Mode-specific colors
+        if session.mode == "edit":
+            mode_style = "bold bright_green"
+        elif session.mode == "plan":
+            mode_style = "bold bright_magenta"
+        elif session.mode == "yolo":
+            mode_style = "bold bright_yellow"
+        else:
+            mode_style = "bold white"
+
+        session_info.append(session.mode, style=mode_style)
         session_info.append("\nCreated: ", style="white")
         session_info.append(session.created_at.strftime("%Y-%m-%d %H:%M:%S"), style="dim")
 
         self.console.print()
         self.console.print(
-            Panel.fit(
+            Panel(
                 session_info,
                 title="[bold green]New Session Created[/bold green]",
                 border_style="green",
+                padding=(1, 2),  # Add padding for better spacing
             )
         )
         self.console.print()
@@ -332,20 +356,63 @@ class UIComponents:
         self.console.print()
 
     def display_user_message(self, message_text: Text):
-        """Display user message.
+        """Display user message with better formatting.
 
         Args:
             message_text: Rich Text object with message content
         """
         self.console.print()
+
+        # Use Panel instead of Panel.fit for better width control
+        # Let it expand naturally based on content, but with padding
         self.console.print(
-            Panel.fit(
+            Panel(
                 message_text,
                 title="[bold bright_blue]You[/bold bright_blue]",
                 border_style="bright_blue",
+                padding=(1, 2),  # Better padding
+                width=min(self.console.width, max(len(str(message_text)) + 8, 40)),  # Min width 40, max terminal width
             )
         )
         self.console.print()
+
+    def display_assistant_output_with_syntax(self, output: str):
+        """Display assistant output with code syntax highlighting.
+
+        Args:
+            output: Assistant's output text
+        """
+        # Detect code blocks with ```language
+        code_block_pattern = r'```(\w+)?\n(.*?)```'
+        matches = list(re.finditer(code_block_pattern, output, re.DOTALL))
+
+        if not matches:
+            # No code blocks, just print normally
+            self.console.print(output, end="")
+            return
+
+        # Print with syntax highlighting
+        last_end = 0
+        for match in matches:
+            # Print text before code block
+            if match.start() > last_end:
+                self.console.print(output[last_end:match.start()], end="")
+
+            # Extract language and code
+            language = match.group(1) or "python"  # Default to python
+            code = match.group(2)
+
+            # Print code with syntax highlighting
+            syntax = Syntax(code, language, theme="monokai", line_numbers=True)
+            self.console.print()
+            self.console.print(syntax)
+            self.console.print()
+
+            last_end = match.end()
+
+        # Print remaining text
+        if last_end < len(output):
+            self.console.print(output[last_end:], end="")
 
     def display_assistant_header(self):
         """Display assistant message header."""
