@@ -17,12 +17,21 @@ mapping_map = {
 async def run_agent(
         message: str,
         thread_id: str,
-        mode: Optional[str] = None,
+        mode: str = "edit",
 ):
-    logger.info(f"thread_id:{thread_id}, 准备开始执行工作流，用户输入: {message}")
+    """Run the supervisor agent with the given message.
+
+    Args:
+        message: User's input message
+        thread_id: Thread ID for session management
+        mode: Operating mode - "edit" (default) or "plan"
+    """
+    print(mode)
+    logger.info(f"thread_id:{thread_id}, mode:{mode}, 准备开始执行工作流，用户输入: {message}")
     config = {
         "configurable": {
             "thread_id": thread_id,
+            "mode": mode,  # Pass mode to agents via config
         },
         "recursion_limit": 50,
     }
