@@ -14,7 +14,8 @@ skip = [
     'ChatPromptTemplate',
     'should_continue',
     'ChatLiteLLMRouter',
-    'StrOutputParser']
+    'StrOutputParser'
+]
 
 
 async def get_run_id(event: Dict[str, Any]) -> str:
@@ -33,6 +34,7 @@ async def execute(event: Dict[str, Any], thread_id: str) -> Optional[list[str]]:
     name = await get_name(event)
     if name in skip:
         return None
+    # print(event)
     event_type = event.get("event", "")
     run_id = await get_run_id(event)
     event_type = event.get("event", "")
@@ -40,7 +42,7 @@ async def execute(event: Dict[str, Any], thread_id: str) -> Optional[list[str]]:
     match event_type:
         case "on_chat_model_stream":
             text = event.get("data")["chunk"].text
-            if text:
+            if text is not None:
                 return [text]
         case "on_tool_end":
             return await on_tool_copilot(event)
@@ -61,7 +63,6 @@ async def on_chain_stream_copilot(event: Dict[str, Any]) -> Optional[list[str]]:
                 allowed_decisions = first_review.get('allowed_decisions', [])
                 allowed_decisions.append('auto_approve')
                 return [f'当前待执行的工具为: {action_name}', '请选择操作方式: [1 接受] [2 拒绝]']
-                # return [{'allowed_decisions': allowed_decisions, "action_name": action_name}]
 
 
 async def on_tool_copilot(event: Dict[str, Any]) -> Optional[list[str]]:

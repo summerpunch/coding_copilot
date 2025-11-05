@@ -5,6 +5,48 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 
+# 需要排除的 SDK 和构建目录
+EXCLUDED_DIRS = {
+    '.venv',
+    'venv',
+    'env',
+    '.env',
+    'dist',
+    'build',
+    '__pycache__',
+    '.git',
+    '.idea',
+    '.vscode',
+    'node_modules',
+    '.pytest_cache',
+    '.mypy_cache',
+    '.tox',
+    'eggs',
+    '.eggs',
+    '*.egg-info',
+}
+
+
+def should_exclude_path(path: Path) -> bool:
+    """
+    检查路径是否应该被排除
+
+    Args:
+        path: 要检查的路径
+
+    Returns:
+        True 如果应该排除，False 否则
+    """
+    try:
+        # 检查路径的每一部分是否在排除列表中
+        for part in path.parts:
+            if part in EXCLUDED_DIRS or part.startswith('.'):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 class ReadFileInput(BaseModel):
     """Input for read_file tool"""
     file_path: str = Field(description="Path to the file to read")
@@ -47,6 +89,11 @@ def read_file(file_path: str, start_line: Optional[int] = None, end_line: Option
         if not path.is_file():
             return f"Error: Not a file: {file_path}"
 
+        # Check if this is an SDK/build directory file and warn
+        warning = ""
+        if should_exclude_path(path):
+            warning = "⚠️ Warning: Reading from SDK/build directory. Consider reading project source files instead.\n\n"
+
         # Use errors='replace' to handle invalid characters
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -63,7 +110,7 @@ def read_file(file_path: str, start_line: Optional[int] = None, end_line: Option
             for i, line in enumerate(lines)
         ]
 
-        return "\n".join(numbered_lines)
+        return warning + "\n".join(numbered_lines)
 
     except UnicodeDecodeError:
         return f"Error: Cannot read file (binary or encoding issue): {file_path}"

@@ -6,6 +6,60 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 
+# 需要排除的 SDK 和构建目录
+EXCLUDED_DIRS = {
+    '.venv',
+    'venv',
+    'env',
+    '.env',
+    'dist',
+    'build',
+    '__pycache__',
+    '.git',
+    '.idea',
+    '.vscode',
+    'node_modules',
+    '.pytest_cache',
+    '.mypy_cache',
+    '.tox',
+    'eggs',
+    '.eggs',
+    '*.egg-info',
+}
+
+
+def should_exclude_path(path: Path, base_path: Path = None) -> bool:
+    """
+    检查路径是否应该被排除
+
+    Args:
+        path: 要检查的路径
+        base_path: 基础路径，用于计算相对路径
+
+    Returns:
+        True 如果应该排除，False 否则
+    """
+    try:
+        # 将路径转换为相对路径进行检查
+        if base_path:
+            try:
+                rel_path = path.relative_to(base_path)
+            except ValueError:
+                # 如果路径不在 base_path 下，使用绝对路径
+                rel_path = path
+        else:
+            rel_path = path
+
+        # 检查路径的每一部分是否在排除列表中
+        for part in rel_path.parts:
+            if part in EXCLUDED_DIRS or part.startswith('.'):
+                return True
+
+        return False
+    except Exception:
+        return False
+
+
 class GlobInput(BaseModel):
     """Input for glob tool"""
     pattern: str = Field(description="Glob pattern to match files (e.g., '**/*.py', 'src/**/*test*.ts')")
@@ -32,7 +86,7 @@ def glob_search(pattern: str, base_path: str = ".") -> str:
         base_path: Base directory to search from
 
     Returns:
-        List of matching file paths
+        List of matching file paths (excludes SDK and build directories)
     """
     try:
         base = Path(base_path)
@@ -42,11 +96,15 @@ def glob_search(pattern: str, base_path: str = ".") -> str:
         # Use glob to find matching files
         matches = list(base.glob(pattern))
 
-        # Filter out directories
-        files = [str(m.relative_to(base)) for m in matches if m.is_file()]
+        # Filter out directories and excluded paths
+        files = [
+            str(m.relative_to(base))
+            for m in matches
+            if m.is_file() and not should_exclude_path(m, base)
+        ]
 
         if not files:
-            return f"No files found matching pattern: {pattern}"
+            return f"No files found matching pattern: {pattern} (SDK directories excluded)"
 
         # Sort by modification time (most recent first)
         files.sort(key=lambda f: Path(base / f).stat().st_mtime, reverse=True)
@@ -84,7 +142,7 @@ def grep_search(
         max_results: Maximum number of results
 
     Returns:
-        Matching lines with file and line numbers
+        Matching lines with file and line numbers (excludes SDK and build directories)
     """
     try:
         search_path = Path(path)
@@ -98,6 +156,7 @@ def grep_search(
         # Determine files to search
         if search_path.is_file():
             files = [search_path]
+            base_for_exclude = search_path.parent
         else:
             # Search directory
             if file_pattern:
@@ -105,8 +164,12 @@ def grep_search(
             else:
                 files = list(search_path.glob("**/*"))
 
-            # Filter to only files
-            files = [f for f in files if f.is_file()]
+            # Filter to only files and exclude SDK directories
+            files = [
+                f for f in files
+                if f.is_file() and not should_exclude_path(f, search_path)
+            ]
+            base_for_exclude = search_path
 
         results = []
         total_matches = 0
@@ -144,7 +207,7 @@ def grep_search(
                 continue
 
         if not results:
-            return f"No matches found for pattern: {pattern}"
+            return f"No matches found for pattern: {pattern} (SDK directories excluded)"
 
         header = f"Found {total_matches} match(es) for '{pattern}'"
         if total_matches > max_results:

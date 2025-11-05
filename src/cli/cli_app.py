@@ -210,32 +210,22 @@ class CodingCopilotCLI:
         # Display assistant header
         self.ui.display_assistant_header()
 
-        # Stream output from agent
-        last_was_newline = False
-        first_output = True
-
         try:
             async for output in run_agent(
-                message=ai_message,
-                thread_id=self.current_session.thread_id,
-                mode=self.current_session.mode,
+                    message=ai_message,
+                    thread_id=self.current_session.thread_id,
+                    mode=self.current_session.mode,
             ):
-                if output:
-                    output_str = str(output)
+                if output is not None:
 
-                    if "\n" in output_str:
-                        self.console.print(output_str)
-                        last_was_newline = output_str.endswith("\n")
+                    if output.startswith("\n") and output.endswith("\n"):
+                        self.console.print(output)
+                    elif output.startswith("\n"):
+                        self.console.print(output, end="")
+                    elif output.endswith("\n"):
+                        self.console.print(output)
                     else:
-                        self.console.print(output_str, end="")
-                        sys.stdout.flush()
-                        last_was_newline = False
-
-                    first_output = False
-
-            # Add newline if needed
-            if not last_was_newline and not first_output:
-                self.console.print()
+                        self.console.print(output, end="")
 
             # Update session stats
             self.session_db.increment_message_count(self.current_session.thread_id)
@@ -262,7 +252,8 @@ class CodingCopilotCLI:
 
         elif cmd == '/new':
             # Get mode from args or use current
-            mode = parts[1] if len(parts) > 1 and parts[1] in ['edit', 'plan', 'yolo'] else self.current_session.mode if self.current_session else 'edit'
+            mode = parts[1] if len(parts) > 1 and parts[1] in ['edit', 'plan',
+                                                               'yolo'] else self.current_session.mode if self.current_session else 'edit'
             self.create_new_session(mode)
 
         elif cmd == '/sessions':
@@ -353,30 +344,30 @@ class CodingCopilotCLI:
 
 @app.command()
 def chat(
-    mode: str = typer.Option(
-        "edit",
-        "--mode",
-        "-m",
-        help="Initial mode: edit (full workflow), plan (planning mode), or yolo (auto-approve)",
-    ),
-    thread_id: Optional[str] = typer.Option(
-        None,
-        "--thread-id",
-        "-t",
-        help="Resume existing session by thread ID",
-    ),
-    new: bool = typer.Option(
-        False,
-        "--new",
-        "-n",
-        help="Force create new session (ignore thread-id)",
-    ),
-    debug: bool = typer.Option(
-        False,
-        "--debug",
-        "-d",
-        help="Enable debug logging",
-    ),
+        mode: str = typer.Option(
+            "edit",
+            "--mode",
+            "-m",
+            help="Initial mode: edit (full workflow), plan (planning mode), or yolo (auto-approve)",
+        ),
+        thread_id: Optional[str] = typer.Option(
+            None,
+            "--thread-id",
+            "-t",
+            help="Resume existing session by thread ID",
+        ),
+        new: bool = typer.Option(
+            False,
+            "--new",
+            "-n",
+            help="Force create new session (ignore thread-id)",
+        ),
+        debug: bool = typer.Option(
+            False,
+            "--debug",
+            "-d",
+            help="Enable debug logging",
+        ),
 ):
     """Start interactive chat with the coding assistant.
 
@@ -447,18 +438,18 @@ def sessions():
 
 @app.command()
 def cleanup(
-    days: int = typer.Option(
-        30,
-        "--days",
-        "-d",
-        help="Delete sessions not used in this many days",
-    ),
-    confirm: bool = typer.Option(
-        False,
-        "--yes",
-        "-y",
-        help="Skip confirmation prompt",
-    ),
+        days: int = typer.Option(
+            30,
+            "--days",
+            "-d",
+            help="Delete sessions not used in this many days",
+        ),
+        confirm: bool = typer.Option(
+            False,
+            "--yes",
+            "-y",
+            help="Skip confirmation prompt",
+        ),
 ):
     """Clean up old sessions."""
     console = Console()

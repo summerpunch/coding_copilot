@@ -1,9 +1,9 @@
 from typing import Literal, Callable
 
 from langchain.agents.middleware import HumanInTheLoopMiddleware, ToolRetryMiddleware
-from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import AIMessage
 from langgraph.constants import END
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 from src.engine.prompts import template
 from langchain.agents import create_agent
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
@@ -12,11 +12,14 @@ from src.engine.tools.shell import bash_execute
 from src.engine.tools.search import glob_search, grep_search
 from src.engine.tools.file_ops import read_file, write_file, edit_file
 import logging
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
+async def executor_node(state: CopilotState) -> Command[
     Literal[
         "__end__"
     ]]:
@@ -32,7 +35,11 @@ async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
         grep_search,
     ]
     agent = create_agent(
-        model=llm_factory.factory(AgentConfig()),
+        model=llm_factory.factory(
+            AgentConfig(
+                model=os.getenv("executor_llm_model", "claude-haiku-4-5-20251001")
+            )
+        ),
         tools=executor_tools,
         system_prompt=prompt,
         middleware=[
@@ -50,20 +57,25 @@ async def executor_node(state: CopilotState, config: RunnableConfig) -> Command[
         ]
     )
     logger.info("Invoking Executor Agent...")
-    response = await agent.ainvoke({"messages": messages}, config=config)
-    logger.info("Executor Agent completed")
+    await agent.ainvoke({"messages": messages}, config=config)
+    messages = state.get("messages", [])
+    messages.append(AIMessage(
+        name="analyzer_agent",
+        content="已完成,状态为completed"
+    ))
     return Command(
         goto=END,
+        update={"messages": messages}
     )
 
 
-async def executor_yolo_node(state: CopilotState, config: RunnableConfig) -> Command[
+async def executor_yolo_node(state: CopilotState) -> Command[
     Literal[
         "__end__"
     ]]:
     logger.info("Starting Executor Agent - 精确代码执行")
     messages = state["messages"]
-    prompt = template.get_local_prompt("executor_prompt")
+    prompt = template.get_local_prompt("executor_best_practice")
     executor_tools = [
         bash_execute,
         read_file,
@@ -73,7 +85,11 @@ async def executor_yolo_node(state: CopilotState, config: RunnableConfig) -> Com
         grep_search,
     ]
     agent = create_agent(
-        model=llm_factory.factory(AgentConfig()),
+        model=llm_factory.factory(
+            AgentConfig(
+                model=os.getenv("executor_llm_model", "claude-haiku-4-5-20251001")
+            )
+        ),
         tools=executor_tools,
         system_prompt=prompt,
         middleware=[
@@ -87,8 +103,13 @@ async def executor_yolo_node(state: CopilotState, config: RunnableConfig) -> Com
         ]
     )
     logger.info("Invoking Executor Agent...")
-    response = await agent.ainvoke({"messages": messages}, config=config)
-    logger.info("Executor Agent completed")
+    await agent.ainvoke({"messages": messages}, config=config)
+    messages = state.get("messages", [])
+    messages.append(AIMessage(
+        name="analyzer_agent",
+        content="已完成,状态为completed"
+    ))
     return Command(
         goto=END,
+        update={"messages": messages}
     )

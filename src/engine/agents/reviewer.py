@@ -1,6 +1,7 @@
 from typing import Literal
 
 from langchain.agents.middleware import ToolRetryMiddleware
+from langchain_core.messages import AIMessage
 from langgraph.constants import END
 from langgraph.types import Command
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
@@ -8,10 +9,13 @@ from src.engine.agents.supervisor import CopilotState
 from src.engine.prompts import template
 from langchain.agents import create_agent
 from src.engine.tools.search import glob_search, grep_search
-from src.engine.tools.file_ops import read_file, write_file, edit_file
+from src.engine.tools.file_ops import read_file
 from src.engine.tools.shell import bash_execute
 import logging
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +33,11 @@ async def reviewer_node(state: CopilotState) -> Command[
         bash_execute
     ]
     agent = create_agent(
-        model=llm_factory.factory(AgentConfig()),
+        model=llm_factory.factory(
+            AgentConfig(
+                model=os.getenv("reviewer_llm_model", "claude-haiku-4-5-20251001")
+            )
+        ),
         tools=reviewer_tools,
         system_prompt=prompt,
         middleware=[
@@ -42,9 +50,13 @@ async def reviewer_node(state: CopilotState) -> Command[
             )
         ]
     )
-    logger.info("Invoking Reviewer Agent...")
-    response = await agent.ainvoke({"messages": messages})
-    logger.info("Reviewer Agent completed")
+    await agent.ainvoke({"messages": messages})
+    messages = state.get("messages", [])
+    messages.append(AIMessage(
+        name="analyzer_agent",
+        content="已完成,状态为completed"
+    ))
     return Command(
         goto=END,
+        update={"messages": messages}
     )

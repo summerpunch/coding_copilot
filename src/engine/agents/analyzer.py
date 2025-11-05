@@ -1,6 +1,7 @@
 from typing import Literal
 
 from langchain.agents.middleware import ToolRetryMiddleware
+from langchain_core.messages import AIMessage
 from langgraph.constants import END
 from langgraph.types import Command
 from src.engine.agents.llm_factory import llm_factory, AgentConfig
@@ -11,7 +12,10 @@ from src.engine.tools.search import glob_search, grep_search
 from src.engine.tools.file_ops import read_file
 from src.engine.mcp import mcp_client
 import logging
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +39,11 @@ async def analyzer_node(state: CopilotState) -> Command[
         analyzer_tools.extend(web_search_tools)
 
     agent = create_agent(
-        model=llm_factory.factory(AgentConfig()),
+        model=llm_factory.factory(
+            AgentConfig(
+                model=os.getenv("analyzer_llm_model", "claude-haiku-4-5-20251001")
+            )
+        ),
         tools=analyzer_tools,
         system_prompt=prompt,
         middleware=[
@@ -49,8 +57,14 @@ async def analyzer_node(state: CopilotState) -> Command[
         ]
     )
     logger.info("Invoking Analyzer Agent...")
-    response = await agent.ainvoke({"messages": messages})
+    await agent.ainvoke({"messages": messages})
     logger.info("Analyzer Agent completed")
+    messages = state.get("messages", [])
+    messages.append(AIMessage(
+        name="analyzer_agent",
+        content="已完成,状态为completed"
+    ))
     return Command(
         goto=END,
+        update={"messages": messages}
     )

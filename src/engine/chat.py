@@ -1,6 +1,5 @@
 import logging
 import asyncio
-from typing import Optional
 
 from src.engine import event_process
 from src.engine.agents import supervisor
@@ -26,11 +25,11 @@ async def run_agent(
         thread_id: Thread ID for session management
         mode: Operating mode - "edit" (default) or "plan"
     """
+    # print(f"thread_id:{thread_id}, mode:{mode}, 准备开始执行工作流，用户输入: {message}")
     logger.info(f"thread_id:{thread_id}, mode:{mode}, 准备开始执行工作流，用户输入: {message}")
     config = {
         "configurable": {
             "thread_id": thread_id,
-            "mode": mode,  # Pass mode to agents via config
         },
         "recursion_limit": 50,
     }

@@ -98,7 +98,11 @@ async def initializer_supervisor_graph(checkpointer: Optional[AsyncSqliteSaver] 
 
 
 async def initializer_supervisor(agents: list[Pregel], checkpointer: Optional[AsyncSqliteSaver] = None):
-    llm = llm_factory.factory(AgentConfig())
+    llm = llm_factory.factory(
+        AgentConfig(
+            model=os.getenv("supervisor_llm_model", "claude-sonnet-4-5-20250929")
+        )
+    )
     supervisor_prompt = template.get_local_prompt("supervisor_prompt")
     web_search_tools = await mcp_client.get_tools('web_search')
     supervisor = create_supervisor(
@@ -121,8 +125,7 @@ async def initializer_supervisor(agents: list[Pregel], checkpointer: Optional[As
                 jitter=True,  # 添加随机抖动(±25%)
             ),
         ],
-        add_handoff_messages=True,
-        add_handoff_back_messages=True
+        add_handoff_back_messages=False
     )
     return supervisor.compile(
         checkpointer=checkpointer

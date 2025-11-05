@@ -6,7 +6,6 @@ from src.api.chat_api import router as chat_router
 
 load_dotenv()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
@@ -14,8 +13,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Neuro Ma API",
-    description="API for Neuro Ma LangGraph-based agent workflow",
+    title="coding cli",
+    description="coding copilot cli",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -29,18 +28,3 @@ app.add_middleware(
 )
 
 app.include_router(chat_router, prefix="/api")
-
-
-@app.get("/api/health")
-async def health_check():
-    """
-    Health check endpoint to verify service is running.
-    
-    Returns:
-        dict: Health status information
-    """
-    return {
-        "status": "healthy",
-        "version": "0.1.0",
-        "service": "Neuro Ma API"
-    }

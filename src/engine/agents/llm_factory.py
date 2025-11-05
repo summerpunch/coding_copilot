@@ -82,7 +82,8 @@ class LLMFactory:
                 base_url=base_url,
                 api_key=api_key,
                 max_tokens_to_sample=8192,
-                temperature=temperature
+                temperature=temperature,
+
             )
         else:
             llm = ChatOpenAI(
