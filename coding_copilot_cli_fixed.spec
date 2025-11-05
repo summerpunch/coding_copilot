@@ -17,10 +17,6 @@ datas = [
 
     # 所有提示词文件 (.md)
     ('src/engine/prompts/*.md', 'src/engine/prompts'),
-    ('src/engine/prompts/Claude Code/*.txt', 'src/engine/prompts/Claude Code'),
-    ('src/engine/prompts/Claude Code/*.json', 'src/engine/prompts/Claude Code'),
-    ('src/engine/prompts/Augment Code/*.txt', 'src/engine/prompts/Augment Code'),
-    ('src/engine/prompts/Augment Code/*.json', 'src/engine/prompts/Augment Code'),
 
     # 如果有其他配置文件，也添加进来
 ]

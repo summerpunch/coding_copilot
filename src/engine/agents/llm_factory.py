@@ -81,7 +81,7 @@ class LLMFactory:
                 model_name=model,
                 base_url=base_url,
                 api_key=api_key,
-                max_tokens_to_sample=8192,
+                max_tokens_to_sample=64000,
                 temperature=temperature,
 
             )

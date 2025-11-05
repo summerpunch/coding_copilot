@@ -57,7 +57,7 @@ async def executor_node(state: CopilotState) -> Command[
         ]
     )
     logger.info("Invoking Executor Agent...")
-    await agent.ainvoke({"messages": messages}, config=config)
+    await agent.ainvoke({"messages": messages})
     messages = state.get("messages", [])
     messages.append(AIMessage(
         name="analyzer_agent",
@@ -103,7 +103,7 @@ async def executor_yolo_node(state: CopilotState) -> Command[
         ]
     )
     logger.info("Invoking Executor Agent...")
-    await agent.ainvoke({"messages": messages}, config=config)
+    await agent.ainvoke({"messages": messages})
     messages = state.get("messages", [])
     messages.append(AIMessage(
         name="analyzer_agent",
